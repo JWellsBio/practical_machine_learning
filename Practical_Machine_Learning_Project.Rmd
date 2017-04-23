@@ -1,0 +1,81 @@
+---
+title: "Practical_Machine_Learning_Project"
+author: "Jason Wells"
+date: "4/23/2017"
+output: 
+  html_document: default
+  md_document:
+    variant: markdown_github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+'Wearables' have become popular fitness accessories recently, with products such as _Jawbone Up, Nike FuelBand, and Fitbit_ (among others) seeing their numbers of users increasing every day. These devices collect a lot of data to help their users improve healthy habits and assess physical performance. In this study, we will use data from accelerometers on the belt, forearm, arm and dumbbell of 6 participants to quantify how well they are performing a physical activity. These participants performed lifts correctly and incorrectly and we will attempt to identify which is which. This data as been made available by: [http://groupware.les.inf.puc-rio.br/har].
+
+### Data and Necessary Packages
+```{r packages}
+library(caret)
+library(randomForest)
+library(rpart.plot)
+library(rpart)
+library(rattle)
+```
+
+```{r data}
+train_url <- 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv'
+test_url  <- 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv'
+training  <- read.csv(url(train_url), na.strings = c('NA', ''))
+testing   <- read.csv(url(test_url), na.strings = c('NA', '')) # we are treating blank cells as NA as well
+```
+
+###Clean Data
+There a lot of NAs, which can add no information to our predictive model, so we will remove them.
+```{r removeNA}
+training <- training[, colSums(is.na(training)) == 0]
+testing  <- testing[, colSums(is.na(testing)) == 0]
+```
+The data we want doesn't start until the 8th column, so we can remove the first 7.
+```{r dataclean}
+training <- training[, -c(1:7)]
+testing <- testing[, -c(1:7)]
+```
+Lastly we will partition the data with a 70-30 split on the `classe` variable
+```{r datasplit}
+set.seed(52766)
+inTrain <- createDataPartition(training$classe, p = 0.7, list = FALSE)
+trainData <- training[inTrain, ]
+testData <- training[-inTrain, ]
+```
+
+### Prediction Methods
+We will build 2 models. First, we will build a random forest model and then a decision tree model (recursive partioning) and see which performs best. We will also use 5-fold cross-validation. We start with a random forest model
+```{r rf_model}
+control <- trainControl(method = 'cv', number = 5)
+
+rf_mod <- train(classe ~ ., data = trainData, method = 'rf', trainControl = control)
+rf_mod
+```
+
+```{r pred_rf}
+pred_rf <- predict(rf_mod, testData)
+confusionMatrix(pred_rf, testData$classe)
+```
+
+We can see the prediction accuracy is 99.3% and the Kappa is 0.99. This is quite high, which means this will probably be our best model choice. We will also run the decision tree model.
+```{r gbm_mod}
+set.seed(66725)
+rp_mod <- train(classe ~ ., data = trainData, method = 'rpart')
+pred_rp <- predict(rp_mod, testData)
+confusionMatrix(pred_rp, testData$classe)
+```
+As expected, this model was not as good as the random forest model, with a preddcitive accuracy of only 55%. We will use the random forest model moving forward.
+
+## Using RF Model to Predict Given Test Data
+```{r predictions}
+pred_test <- predict(rf_mod, testing)
+pred_test
+```
+
